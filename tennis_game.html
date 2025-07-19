@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古典的テニスゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #000;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #gameContainer {
+            border: 2px solid white;
+            position: relative;
+            background-color: #000;
+        }
+
+        #gameCanvas {
+            display: block;
+            background-color: #000;
+        }
+
+        #scoreBoard {
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .paddle {
+            position: absolute;
+            background-color: white;
+        }
+
+        .ball {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="scoreBoard">
+        <div>プレイヤー: <span id="player1Score">0</span> | コンピューター: <span id="player2Score">0</span></div>
+    </div>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+    
+    <div id="controls">
+        <p>操作方法:</p>
+        <p>W/S キーでパドルを上下移動</p>
+        <p>スペースキー: ゲーム開始/一時停止</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // ゲーム状態
+        let gameRunning = false;
+        let gameLoop;
+        
+        // ゲームオブジェクト
+        const game = {
+            width: canvas.width,
+            height: canvas.height,
+            
+            ball: {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                radius: 10,
+                velocityX: 10,
+                velocityY: 6,
+                speed: 10
+            },
+            
+            player1: {
+                x: 10,
+                y: canvas.height / 2 - 50,
+                width: 10,
+                height: 100,
+                score: 0
+            },
+            
+            player2: {
+                x: canvas.width - 20,
+                y: canvas.height / 2 - 50,
+                width: 10,
+                height: 100,
+                score: 0
+            }
+        };
+        
+        // キー入力管理
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleGame();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+        
+        // ゲーム開始/停止
+        function toggleGame() {
+            if (gameRunning) {
+                stopGame();
+            } else {
+                startGame();
+            }
+        }
+        
+        function startGame() {
+            gameRunning = true;
+            gameLoop = setInterval(update, 1000/60); // 60 FPS
+        }
+        
+        function stopGame() {
+            gameRunning = false;
+            clearInterval(gameLoop);
+        }
+        
+        // ゲームリセット
+        function resetBall() {
+            game.ball.x = canvas.width / 2;
+            game.ball.y = canvas.height / 2;
+            game.ball.velocityX = -game.ball.velocityX;
+            game.ball.velocityY = Math.random() * 6 - 3;
+        }
+        
+        // パドル移動
+        function updatePaddles() {
+            const paddleSpeed = 7;
+            
+            // プレイヤー1 (W/S)
+            if (keys['w'] && game.player1.y > 0) {
+                game.player1.y -= paddleSpeed;
+            }
+            if (keys['s'] && game.player1.y < canvas.height - game.player1.height) {
+                game.player1.y += paddleSpeed;
+            }
+            
+            // プレイヤー2 (AI制御)
+            updateAI();
+        }
+        
+        // AI制御
+        function updateAI() {
+            const paddleCenter = game.player2.y + game.player2.height / 2;
+            const ballY = game.ball.y;
+            const aiSpeed = 6;
+            const deadZone = 15;
+            
+            if (ballY < paddleCenter - deadZone) {
+                game.player2.y = Math.max(0, game.player2.y - aiSpeed);
+            } else if (ballY > paddleCenter + deadZone) {
+                game.player2.y = Math.min(canvas.height - game.player2.height, game.player2.y + aiSpeed);
+            }
+        }
+        
+        // ボール移動と衝突判定
+        function updateBall() {
+            game.ball.x += game.ball.velocityX;
+            game.ball.y += game.ball.velocityY;
+            
+            // 上下の壁との衝突
+            if (game.ball.y <= game.ball.radius || game.ball.y >= canvas.height - game.ball.radius) {
+                game.ball.velocityY = -game.ball.velocityY;
+            }
+            
+            // パドルとの衝突判定
+            function checkPaddleCollision(paddle) {
+                return game.ball.x - game.ball.radius < paddle.x + paddle.width &&
+                       game.ball.x + game.ball.radius > paddle.x &&
+                       game.ball.y - game.ball.radius < paddle.y + paddle.height &&
+                       game.ball.y + game.ball.radius > paddle.y;
+            }
+            
+            // プレイヤー1のパドルとの衝突
+            if (checkPaddleCollision(game.player1)) {
+                game.ball.velocityX = Math.abs(game.ball.velocityX);
+                const relativeIntersectY = (game.ball.y - (game.player1.y + game.player1.height/2));
+                game.ball.velocityY = relativeIntersectY * 0.1;
+            }
+            
+            // プレイヤー2のパドルとの衝突
+            if (checkPaddleCollision(game.player2)) {
+                game.ball.velocityX = -Math.abs(game.ball.velocityX);
+                const relativeIntersectY = (game.ball.y - (game.player2.y + game.player2.height/2));
+                game.ball.velocityY = relativeIntersectY * 0.1;
+            }
+            
+            // 得点判定
+            if (game.ball.x < 0) {
+                game.player2.score++;
+                updateScore();
+                resetBall();
+            } else if (game.ball.x > canvas.width) {
+                game.player1.score++;
+                updateScore();
+                resetBall();
+            }
+        }
+        
+        // スコア更新
+        function updateScore() {
+            document.getElementById('player1Score').textContent = game.player1.score;
+            document.getElementById('player2Score').textContent = game.player2.score;
+        }
+        
+        // 描画
+        function render() {
+            // 画面クリア
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 中央線
+            ctx.setLineDash([5, 15]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // パドル描画
+            ctx.fillStyle = 'white';
+            ctx.fillRect(game.player1.x, game.player1.y, game.player1.width, game.player1.height);
+            ctx.fillRect(game.player2.x, game.player2.y, game.player2.width, game.player2.height);
+            
+            // ボール描画
+            ctx.beginPath();
+            ctx.arc(game.ball.x, game.ball.y, game.ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+        }
+        
+        // メインゲームループ
+        function update() {
+            updatePaddles();
+            updateBall();
+            render();
+        }
+        
+        // 初期描画
+        render();
+    </script>
+</body>
+</html>
